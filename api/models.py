@@ -13,8 +13,13 @@ class Profile(models.Model):
 
 class Consultation(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='consultations')
-    symptoms = models.TextField()
+    symptoms = models.TextField(blank=True, default='')
+    image = models.ImageField(upload_to='xrays/%Y/%m/', null=True, blank=True)
     ai_response = models.TextField(blank=True)
+    grade = models.IntegerField(null=True, blank=True)
+    confidence = models.FloatField(null=True, blank=True)
+    expected_grade = models.FloatField(null=True, blank=True)
+    probabilities = models.JSONField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
