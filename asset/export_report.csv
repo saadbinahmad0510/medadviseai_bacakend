@@ -1,0 +1,5 @@
+model,unmatched,agreement,max_dev,keras_before,keras_after,tflite
+DenseNet201,0,1.0,1e-06,219.0,75.8,19.1
+EfficientNetV2S,0,1.0,1e-06,243.6,83.1,22.0
+MobileNetV2,0,1.0,2e-06,27.3,9.6,2.5
+Xception,0,1.0,3e-06,250.2,84.0,21.5

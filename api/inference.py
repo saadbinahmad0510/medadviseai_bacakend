@@ -6,7 +6,7 @@ import tensorflow as tf
 from django.conf import settings
 from PIL import Image
 
-MODEL_PATH = Path(settings.BASE_DIR).parent / 'asset' / 'MobileNetV2.keras'
+MODEL_PATH = Path(settings.BASE_DIR) / 'asset' / 'MobileNetV2.keras'
 
 GRADES = ['Normal', 'Doubtful', 'Mild', 'Moderate', 'Severe']
 GRADE_VALUES = np.array([0, 1, 2, 3, 4], dtype=np.float32)
