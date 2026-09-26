@@ -6,7 +6,7 @@ from django.core.management.base import BaseCommand
 
 from api.inference import get_classifier
 
-SAMPLES_DIR = Path(settings.BASE_DIR).parent / 'asset' / 'samples'
+SAMPLES_DIR = Path(settings.BASE_DIR) / 'asset' / 'samples'
 FILENAME_RE = re.compile(r'^grade(\d)_\d+\.png$')
 
 

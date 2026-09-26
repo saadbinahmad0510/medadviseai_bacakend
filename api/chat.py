@@ -3,7 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 
-METRICS_PATH = Path(settings.BASE_DIR).parent / 'asset' / 'metrics.json'
+METRICS_PATH = Path(settings.BASE_DIR) / 'asset' / 'metrics.json'
 
 GRADE_LABELS = ['Normal', 'Doubtful', 'Mild', 'Moderate', 'Severe']
 

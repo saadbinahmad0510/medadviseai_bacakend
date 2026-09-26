@@ -6,7 +6,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-SAMPLE_IMAGE_PATH = Path(settings.BASE_DIR).parent / 'asset' / 'samples' / 'grade4_0.png'
+SAMPLE_IMAGE_PATH = Path(settings.BASE_DIR) / 'asset' / 'samples' / 'grade4_0.png'
 
 
 class HealthCheckTests(APITestCase):
