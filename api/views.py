@@ -1,4 +1,8 @@
+import json
 import logging
+import os
+import urllib.request
+import urllib.error
 
 from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
@@ -95,3 +99,90 @@ class ChatView(APIView):
 
         result = chat.reply(serializer.validated_data['message'], consultation)
         return Response(result)
+
+
+# ---------------------------------------------------------------------------
+# Gemini proxy — keeps GEMINI_API_KEY server-side (never exposed to browser)
+# ---------------------------------------------------------------------------
+_GEMINI_URL = (
+    'https://generativelanguage.googleapis.com/v1beta/models/'
+    'gemini-1.5-flash:generateContent'
+)
+
+_GEMINI_SYSTEM = (
+    'You are MedAdvise AI\'s medical assistant for knee osteoarthritis (KOA). '
+    'Answer questions about the Kellgren-Lawrence grading scale (0-4), X-ray analysis results, '
+    'and general KOA information. Always remind users this is a research prototype only — '
+    'not for clinical decisions. Recommend consulting an orthopedic specialist. '
+    'Keep responses concise (under 150 words), compassionate, and accurate.'
+)
+
+
+class GeminiChatView(APIView):
+    """Server-side proxy to Google Gemini 1.5 Flash.
+
+    Accepts ``{ "message": "...", "history": [...], "context": "..." }``
+    and returns ``{ "reply": "..." }``.
+
+    Requires GEMINI_API_KEY in the environment. Returns 503 when the key is
+    absent so the frontend can fall back to the rule-based chat endpoint.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        api_key = os.environ.get('GEMINI_API_KEY', '').strip()
+        if not api_key:
+            return Response({'error': 'NO_API_KEY', 'reply': None}, status=503)
+
+        message = (request.data.get('message') or '').strip()
+        if not message:
+            return Response({'error': 'message is required'}, status=400)
+
+        history = request.data.get('history') or []
+        context_note = request.data.get('context') or ''
+
+        system_text = _GEMINI_SYSTEM
+        if context_note:
+            system_text += f'\n\nCurrent patient context:\n{context_note}'
+
+        contents = [
+            {'role': 'user', 'parts': [{'text': system_text}]},
+            {'role': 'model', 'parts': [{'text': 'Understood. I am ready to help.'}]},
+        ]
+        for turn in history:
+            if isinstance(turn, dict) and turn.get('role') in ('user', 'model'):
+                contents.append(turn)
+        contents.append({'role': 'user', 'parts': [{'text': message}]})
+
+        payload = json.dumps({
+            'contents': contents,
+            'generationConfig': {'maxOutputTokens': 300, 'temperature': 0.3},
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            f'{_GEMINI_URL}?key={api_key}',
+            data=payload,
+            headers={'Content-Type': 'application/json'},
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                data = json.loads(resp.read())
+        except urllib.error.HTTPError as exc:
+            body = exc.read().decode('utf-8', errors='replace')
+            logger.warning('Gemini HTTP %s: %s', exc.code, body[:200])
+            if exc.code == 429:
+                return Response({'error': 'RATE_LIMIT'}, status=429)
+            return Response({'error': f'Gemini HTTP {exc.code}'}, status=502)
+        except Exception as exc:  # noqa: BLE001
+            logger.exception('Gemini request failed: %s', exc)
+            return Response({'error': str(exc)}, status=502)
+
+        reply_text = (
+            data.get('candidates', [{}])[0]
+            .get('content', {})
+            .get('parts', [{}])[0]
+            .get('text', 'No response generated.')
+        )
+        return Response({'reply': reply_text})
