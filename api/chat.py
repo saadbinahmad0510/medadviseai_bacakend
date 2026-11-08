@@ -15,17 +15,24 @@ EXAMPLE_QUESTIONS = [
 ]
 
 INTENTS = [
-    ('kellgren', ['kellgren', 'kl scale', 'grading system', 'lawrence']),
+    ('kellgren', ['kellgren', 'kl scale', 'grading system', 'lawrence', 'kl grade', 'grading scale']),
     ('advice', [
         'should i do', 'treatment', 'see a doctor', 'diagnose', 'diagnosis',
         'hurts', 'hurt', 'my knee', 'should i take', 'surgery', 'medication',
-        'exercise', 'painkiller',
+        'exercise', 'painkiller', 'physiotherapy', 'physical therapy', 'nsaid',
+        'anti-inflammatory', 'injection', 'replacement', 'arthroplasty',
     ]),
-    ('grade1', ['grade 1', 'doubtful', 'unreliable', 'why unreliable']),
-    ('accuracy', ['accurate', 'accuracy', 'reliable', 'reliability', 'trust']),
-    ('architecture', ['how does it work', 'architecture', 'mobilenet', 'how it works', 'how the model']),
-    ('dataset', ['dataset', 'data from', 'data source', 'where does the data']),
-    ('result', ['result', 'explain', 'grade', 'mean', 'means']),
+    ('grade1', ['grade 1', 'doubtful', 'unreliable', 'why unreliable', 'grade1', 'why is grade 1']),
+    ('accuracy', ['accurate', 'accuracy', 'reliable', 'reliability', 'trust', 'how good', 'precision']),
+    ('architecture', [
+        'how does it work', 'architecture', 'mobilenet', 'how it works', 'how the model',
+        'neural network', 'deep learning', 'cnn', 'convolutional', 'ai model', 'machine learning',
+    ]),
+    ('dataset', ['dataset', 'data from', 'data source', 'where does the data', 'training data', 'oai', 'mendeley']),
+    ('ensemble', ['ensemble', 'densenet', 'efficientnet', 'xception', 'multiple models', '4 models']),
+    ('binary', ['binary', 'oa or not', 'has oa', 'no oa', 'detected or not', 'positive or negative']),
+    ('limitations', ['limitation', 'limitations', 'weakness', 'not work', 'fail', 'mistake', 'error', 'wrong']),
+    ('result', ['result', 'explain', 'grade', 'mean', 'means', 'what does', 'what is my']),
 ]
 
 _metrics = None
@@ -145,6 +152,53 @@ def _fallback_reply():
     )
 
 
+def _ensemble_reply():
+    m = get_metrics()
+    h = m['headline']
+    per_model = m.get('per_model', {})
+    lines = []
+    for name, stats in per_model.items():
+        if isinstance(stats, dict) and 'qwk' in stats:
+            lines.append(f"  • {name}: QWK {stats['qwk']:.3f}, Binary Acc {stats.get('acc_binary', 0)*100:.1f}%")
+    model_list = '\n'.join(lines) if lines else '  DenseNet201, EfficientNetV2S, MobileNetV2, Xception'
+    return (
+        f"The system was trained as a 4-model ensemble:\n{model_list}\n"
+        f"Together they reach QWK {h['qwk']:.3f} and {h['acc_binary']*100:.1f}% binary accuracy. "
+        "The deployed app uses MobileNetV2 alone for speed and size (9.6 MB vs ~200 MB ensemble)."
+    )
+
+
+def _binary_reply(consultation):
+    m = get_metrics()
+    h = m['headline']
+    dep = m['deployment']
+    base = (
+        f"The model's most reliable output is binary: 'OA detected' (Grade ≥ 2) vs "
+        f"'No OA' (Grade 0–1). Binary accuracy is {h['acc_binary']*100:.1f}% (ensemble) "
+        f"or {dep.get('acc_binary', dep.get('qwk', 0))*100:.1f}% (deployed MobileNetV2)."
+    )
+    if consultation and consultation.grade is not None:
+        oa = consultation.grade >= 2
+        base += (
+            f" For this X-ray (Grade {consultation.grade}), the binary prediction is: "
+            f"{'Osteoarthritis Detected' if oa else 'No Osteoarthritis Detected'}."
+        )
+    return base
+
+
+def _limitations_reply():
+    m = get_metrics()
+    limitations = m.get('limitations', [])
+    if limitations:
+        items = '\n'.join(f"  • {lim}" for lim in limitations)
+        return f"Known limitations of this model:\n{items}"
+    return (
+        "Known limitations: Grade 1 reliability is low (F1 ≈ 0.39), the model was trained "
+        "exclusively on the OAI dataset (mostly US patients, age 45–79), single knee view only, "
+        "no clinical validation, and binary OA detection is more reliable than 5-class grading."
+    )
+
+
 def reply(message, consultation=None):
     intent = match_intent(message)
     builders = {
@@ -155,6 +209,9 @@ def reply(message, consultation=None):
         'advice': _advice_reply,
         'architecture': _architecture_reply,
         'dataset': _dataset_reply,
+        'ensemble': _ensemble_reply,
+        'binary': lambda: _binary_reply(consultation),
+        'limitations': _limitations_reply,
         'fallback': _fallback_reply,
     }
     return {'reply': builders[intent](), 'intent': intent}
